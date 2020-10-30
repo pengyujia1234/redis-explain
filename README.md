@@ -5,6 +5,8 @@ redis 相关博文和带有注释的代码，本文是以redis-6.0.7为蓝本，
 目前暂时用于redis代码的学习，后面可能会放入其它源码讲解。
 如果觉得作者博文写得很好，请给本仓库一个小星星
 代码注释也会持续更新
+# 关于如何阅读源码
+推荐使用vscode 直接导入本工程即可。
 
 # redis 博文系列
 1. [ziplist vs 普通数组，以及redis hash 在ziplist的实现](https://blog.csdn.net/qq_33361976/article/details/108432016)
