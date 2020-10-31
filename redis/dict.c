@@ -988,7 +988,8 @@ unsigned long dictScan(dict *d,
             //遍历元素
             next = de->next;
             // 这里调用回调函数，
-            // 做一些参数记录
+            // 将遍历到的值放入list
+            // 用于返回
             fn(privdata, de);
             de = next;
         }
