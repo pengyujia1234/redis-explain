@@ -172,7 +172,7 @@ void setCommand(client *c) {
             return;
         }
     }
-    //这里是redis key， 做压缩处理
+    //这里是redis value， 做压缩处理
     c->argv[2] = tryObjectEncoding(c->argv[2]);
     setGenericCommand(c,flags,c->argv[1],c->argv[2],expire,unit,NULL,NULL);
 }
@@ -223,18 +223,19 @@ void setrangeCommand(client *c) {
     robj *o;
     long offset;
     sds value = c->argv[3]->ptr;
-
+    //获取offset
     if (getLongFromObjectOrReply(c,c->argv[2],&offset,NULL) != C_OK)
         return;
-
+    //offset 不能小于0
     if (offset < 0) {
         addReplyError(c,"offset is out of range");
         return;
     }
-
+    //找到对应得string
     o = lookupKeyWrite(c->db,c->argv[1]);
     if (o == NULL) {
         /* Return 0 when setting nothing on a non-existing string */
+        //如果为空则创建
         if (sdslen(value) == 0) {
             addReply(c,shared.czero);
             return;
@@ -243,7 +244,7 @@ void setrangeCommand(client *c) {
         /* Return when the resulting string exceeds allowed size */
         if (checkStringLength(c,offset+sdslen(value)) != C_OK)
             return;
-
+        //创建一个sds 放入字典里面
         o = createObject(OBJ_STRING,sdsnewlen(NULL, offset+sdslen(value)));
         dbAdd(c->db,c->argv[1],o);
     } else {
@@ -255,16 +256,20 @@ void setrangeCommand(client *c) {
 
         /* Return existing string length when setting nothing */
         olen = stringObjectLen(o);
+        //如果value 长度为0直接返回旧的str
+        //返回的是长度
         if (sdslen(value) == 0) {
             addReplyLongLong(c,olen);
             return;
         }
 
         /* Return when the resulting string exceeds allowed size */
+        //整个sds 长度不能超过512mb
         if (checkStringLength(c,offset+sdslen(value)) != C_OK)
             return;
 
         /* Create a copy when the object is shared or encoded. */
+        //保证string没有被饮用
         o = dbUnshareStringValue(c->db,c->argv[1],o);
     }
 

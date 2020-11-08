@@ -929,6 +929,7 @@ typedef struct zskiplistNode {
 } zskiplistNode;
 
 typedef struct zskiplist {
+    //头尾
     struct zskiplistNode *header, *tail;
     unsigned long length;
     int level;

@@ -226,12 +226,26 @@ struct redisCommand redisCommandTable[] = {
      "read-only fast @keyspace",
      0,NULL,1,-1,1,0,0,0},
 
+    //加关键字 共有4个参数，setbit key offset value
     {"setbit",setbitCommand,4,
      "write use-memory @bitmap",
      0,NULL,1,1,1,0,0,0},
-
+    // getbit 命令 有3个参数 getbit key offset
+    // 取得某一位上面得
     {"getbit",getbitCommand,3,
      "read-only fast @bitmap",
+     0,NULL,1,1,1,0,0,0},
+    // 对多个对应可以做and或者or或者or操作
+     {"bitop",bitopCommand,-4,
+     "write use-memory @bitmap",
+     0,NULL,2,-1,1,0,0,0},
+    // 获取某个二进制串上面1的个数
+    {"bitcount",bitcountCommand,-2,
+     "read-only @bitmap",
+     0,NULL,1,1,1,0,0,0},
+    // 获取某个二进制串上面第一个0或者1的位置
+    {"bitpos",bitposCommand,-3,
+     "read-only @bitmap",
      0,NULL,1,1,1,0,0,0},
 
     {"bitfield",bitfieldCommand,-2,
@@ -856,18 +870,6 @@ struct redisCommand redisCommandTable[] = {
     {"time",timeCommand,1,
      "read-only random fast ok-loading ok-stale",
      0,NULL,0,0,0,0,0,0},
-
-    {"bitop",bitopCommand,-4,
-     "write use-memory @bitmap",
-     0,NULL,2,-1,1,0,0,0},
-
-    {"bitcount",bitcountCommand,-2,
-     "read-only @bitmap",
-     0,NULL,1,1,1,0,0,0},
-
-    {"bitpos",bitposCommand,-3,
-     "read-only @bitmap",
-     0,NULL,1,1,1,0,0,0},
 
     {"wait",waitCommand,3,
      "no-script @keyspace",
