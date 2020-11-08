@@ -29,4 +29,6 @@ redis 相关博文和带有注释的代码，本文是以redis-6.0.7为蓝本，
 
 10. [redis系列，你真的了解scan命令吗](https://blog.csdn.net/qq_33361976/article/details/109285073)
 
+11. [redis系列，bitmap 命令全解析以及源码赏析](https://blog.csdn.net/qq_33361976/article/details/109546651)
+
 ## 后续文章持续更新中
