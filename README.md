@@ -27,4 +27,6 @@ redis 相关博文和带有注释的代码，本文是以redis-6.0.7为蓝本，
 
 9. [redis系列，给你看最完整的字典讲解](https://blog.csdn.net/qq_33361976/article/details/109265009)
 
+10. [redis系列，你真的了解scan命令吗](https://blog.csdn.net/qq_33361976/article/details/109285073)
+
 ## 后续文章持续更新中
