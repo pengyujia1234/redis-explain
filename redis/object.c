@@ -253,19 +253,24 @@ robj *createHashObject(void) {
 }
 
 robj *createZsetObject(void) {
+    //分配空间
     zset *zs = zmalloc(sizeof(*zs));
     robj *o;
-
+    //分配字典
     zs->dict = dictCreate(&zsetDictType,NULL);
     zs->zsl = zslCreate();
+    //zs的初始化
     o = createObject(OBJ_ZSET,zs);
     o->encoding = OBJ_ENCODING_SKIPLIST;
     return o;
 }
 
 robj *createZsetZiplistObject(void) {
+    //创建ziplist
     unsigned char *zl = ziplistNew();
+    //type 是zset
     robj *o = createObject(OBJ_ZSET,zl);
+    //但encoding 是ziplist
     o->encoding = OBJ_ENCODING_ZIPLIST;
     return o;
 }

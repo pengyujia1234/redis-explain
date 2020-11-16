@@ -919,24 +919,33 @@ struct sharedObjectsStruct {
 
 /* ZSETs use a specialized version of Skiplists */
 typedef struct zskiplistNode {
+    //sds 可以认为key
     sds ele;
+    //通过score 来排序
     double score;
+    //后指针
     struct zskiplistNode *backward;
     struct zskiplistLevel {
+        //前指针
         struct zskiplistNode *forward;
+        //数据宽度，相邻节点隔了几个元素
         unsigned long span;
     } level[];
 } zskiplistNode;
 
 typedef struct zskiplist {
-    //头尾
+    //头尾节点
     struct zskiplistNode *header, *tail;
+    //元素长度
     unsigned long length;
+    //整体层级
     int level;
 } zskiplist;
 
 typedef struct zset {
+    //zset 包含一个字典
     dict *dict;
+    //跳表
     zskiplist *zsl;
 } zset;
 
