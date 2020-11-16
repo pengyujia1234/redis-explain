@@ -31,4 +31,6 @@ redis 相关博文和带有注释的代码，本文是以redis-6.0.7为蓝本，
 
 11. [redis系列，bitmap 命令全解析以及源码赏析](https://blog.csdn.net/qq_33361976/article/details/109546651)
 
+12. [redis系列，zset到底是个什么鬼（一）！深度源码剖析](https://blog.csdn.net/qq_33361976/article/details/109711907)
+
 ## 后续文章持续更新中
