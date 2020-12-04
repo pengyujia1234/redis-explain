@@ -106,6 +106,7 @@ void latencyAddSample(const char *event, mstime_t latency) {
         ts->idx = 0;
         ts->max = 0;
         memset(ts->samples,0,sizeof(ts->samples));
+        //记录延迟事件
         dictAdd(server.latency_events,zstrdup(event),ts);
     }
 

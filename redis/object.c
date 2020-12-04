@@ -462,13 +462,13 @@ robj *tryObjectEncoding(robj *o) {
     /* We try some specialized encoding only for objects that are
      * RAW or EMBSTR encoded, in other words objects that are still
      * in represented by an actually array of chars. */
-    //判断是
+    //判断是否是sds类型
     if (!sdsEncodedObject(o)) return o;
 
     /* It's not safe to encode shared objects: shared objects can be shared
      * everywhere in the "object space" of Redis and may end in places where
      * they are not handled. We handle them only as values in the keyspace. */
-    //判断是不是一个共享变量，这个压缩string 只
+    //判断是不是一个共享变量，set的value不能被共享
      if (o->refcount > 1) return o;
 
     /* Check if we can represent this string as a long integer.

@@ -415,51 +415,51 @@ struct redisCommand redisCommandTable[] = {
     {"zadd",zaddCommand,-4,
      "write use-memory fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //对某个元素incr
     {"zincrby",zincrbyCommand,4,
      "write use-memory fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //删除多个元素
     {"zrem",zremCommand,-3,
      "write fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //删除score范围值
     {"zremrangebyscore",zremrangebyscoreCommand,4,
      "write @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //删除rank范围值
     {"zremrangebyrank",zremrangebyrankCommand,4,
      "write @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //主要用于分数都一样，按member排序的场景
     {"zremrangebylex",zremrangebylexCommand,4,
      "write @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //多个zset合并成一个key，并集
     {"zunionstore",zunionstoreCommand,-4,
      "write use-memory @sortedset",
      0,zunionInterGetKeys,0,0,0,0,0,0},
-
+    //多个zset合并一个key，交集
     {"zinterstore",zinterstoreCommand,-4,
      "write use-memory @sortedset",
      0,zunionInterGetKeys,0,0,0,0,0,0},
-
+    //主要用于zset来浏览的
     {"zrange",zrangeCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //正向查询
     {"zrangebyscore",zrangebyscoreCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //反向查询
     {"zrevrangebyscore",zrevrangebyscoreCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //通过member的顺序来浏览
     {"zrangebylex",zrangebylexCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //反向
     {"zrevrangebylex",zrevrangebylexCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
@@ -475,19 +475,19 @@ struct redisCommand redisCommandTable[] = {
     {"zrevrange",zrevrangeCommand,-4,
      "read-only @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //返回元素个数
     {"zcard",zcardCommand,2,
      "read-only fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //返回score
     {"zscore",zscoreCommand,3,
      "read-only fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //返回单个元素的排名
     {"zrank",zrankCommand,3,
      "read-only fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //反向rank搜索
     {"zrevrank",zrevrankCommand,3,
      "read-only fast @sortedset",
      0,NULL,1,1,1,0,0,0},
@@ -495,11 +495,11 @@ struct redisCommand redisCommandTable[] = {
     {"zscan",zscanCommand,-3,
      "read-only random @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //返回最小的元素并删除
     {"zpopmin",zpopminCommand,-2,
      "write fast @sortedset",
      0,NULL,1,1,1,0,0,0},
-
+    //返回最大的元素并删除
     {"zpopmax",zpopmaxCommand,-2,
      "write fast @sortedset",
      0,NULL,1,1,1,0,0,0},
@@ -1475,6 +1475,7 @@ void updateDictResizePolicy(void) {
 
 /* Return true if there are no active children processes doing RDB saving,
  * AOF rewriting, or some side process spawned by a loaded module. */
+//判断是否有子线程在运行
 int hasActiveChildProcess() {
     return server.rdb_child_pid != -1 ||
            server.aof_child_pid != -1 ||
@@ -1782,9 +1783,10 @@ void checkChildrenDone(void) {
      * as long as we didn't finish to drain the pipe, since then we're at risk
      * of starting a new fork and a new pipe before we're done with the previous
      * one. */
+    //检查是否有rdb 在运行
     if (server.rdb_child_pid != -1 && server.rdb_pipe_conns)
         return;
-
+    //检查子进程是否已经完成
     if ((pid = wait3(&statloc,WNOHANG,NULL)) != 0) {
         int exitcode = WEXITSTATUS(statloc);
         int bysignal = 0;
@@ -1967,6 +1969,8 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     clientsCron();
 
     /* Handle background operations on Redis databases. */
+    //过期键策略执行，
+    //键值空间rehash
     databasesCron();
 
     /* Start a scheduled AOF rewrite if this was requested by the user while
@@ -1978,19 +1982,26 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
     }
 
     /* Check if a background saving or AOF rewrite in progress terminated. */
+    //判断是否有子线程在运行
     if (hasActiveChildProcess() || ldbPendingChildren())
     {
         checkChildrenDone();
     } else {
         /* If there is not a background saving/rewrite in progress check if
          * we have to save/rewrite now. */
+         //检查是否rdb的save和rewrite达到了条件
         for (j = 0; j < server.saveparamslen; j++) {
+            //saveparams 对应config文件里面的次数和seconds
             struct saveparam *sp = server.saveparams+j;
 
             /* Save if we reached the given amount of changes,
              * the given amount of seconds, and if the latest bgsave was
              * successful or if, in case of an error, at least
              * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
+            //判断修改次数是否达到次数
+            //比较上次时间内是否满足了条数
+            //上次bgsave 时间大于设置阈值5s
+            //或者上次bgsave状态是ok的
             if (server.dirty >= sp->changes &&
                 server.unixtime-server.lastsave > sp->seconds &&
                 (server.unixtime-server.lastbgsave_try >
@@ -2000,6 +2011,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                 serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
                     sp->changes, (int)sp->seconds);
                 rdbSaveInfo rsi, *rsiptr;
+                //这里主要是高可用数据逻辑
                 rsiptr = rdbPopulateSaveInfo(&rsi);
                 rdbSaveBackground(server.rdb_filename,rsiptr);
                 break;
@@ -4966,6 +4978,7 @@ static void sigKillChildHandler(int sig) {
 }
 
 void setupChildSignalHandlers(void) {
+    //设置信号安全退出子进程
     struct sigaction act;
 
     /* When the SA_SIGINFO flag is set in sa_flags then sa_sigaction is used.
@@ -4983,6 +4996,7 @@ void setupChildSignalHandlers(void) {
  * parent restarts it can bind/lock despite the child possibly still running. */
 void closeClildUnusedResourceAfterFork() {
     closeListeningSockets(0);
+    //如果是cluster 关闭相关配置文件的
     if (server.cluster_enabled && server.cluster_config_file_lock_fd != -1)
         close(server.cluster_config_file_lock_fd);  /* don't care if this fails */
 }
@@ -4992,31 +5006,38 @@ int redisFork() {
     long long start = ustime();
     if ((childpid = fork()) == 0) {
         /* Child */
+        //这里开始是子线程在运行
         setOOMScoreAdj(CONFIG_OOM_BGCHILD);
+        //设置信号handler
         setupChildSignalHandlers();
+        //关闭sock端口
         closeClildUnusedResourceAfterFork();
     } else {
         /* Parent */
         server.stat_fork_time = ustime()-start;
         server.stat_fork_rate = (double) zmalloc_used_memory() * 1000000 / server.stat_fork_time / (1024*1024*1024); /* GB per second. */
+        //记录延时操作
         latencyAddSampleIfNeeded("fork",server.stat_fork_time/1000);
         if (childpid == -1) {
             return -1;
         }
+        //如果rdb在运行，禁止rehash
         updateDictResizePolicy();
     }
     return childpid;
 }
 
 void sendChildCOWInfo(int ptype, char *pname) {
+    //获取子进程单独使用的空间
     size_t private_dirty = zmalloc_get_private_dirty(-1);
-
+    //如果private_dirty不为0
+    //则打印出子进程所使用的空间
     if (private_dirty) {
         serverLog(LL_NOTICE,
             "%s: %zu MB of memory used by copy-on-write",
             pname, private_dirty/(1024*1024));
     }
-
+    //设置变量
     server.child_info_data.cow_size = private_dirty;
     sendChildInfo(ptype);
 }

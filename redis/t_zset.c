@@ -433,6 +433,7 @@ unsigned long zslDeleteRangeByScore(zskiplist *zsl, zrangespec *range, dict *dic
     int i;
 
     x = zsl->header;
+    //逐层遍历
     for (i = zsl->level-1; i >= 0; i--) {
         while (x->level[i].forward && (range->minex ?
             x->level[i].forward->score <= range->min :
@@ -620,12 +621,14 @@ int zslParseLexRangeItem(robj *item, sds *dest, int *ex) {
     char *c = item->ptr;
 
     switch(c[0]) {
+    //正无穷    
     case '+':
         if (c[1] != '\0') return C_ERR;
         *ex = 1;
         *dest = shared.maxstring;
         return C_OK;
     case '-':
+        //负无穷
         if (c[1] != '\0') return C_ERR;
         *ex = 1;
         *dest = shared.minstring;
@@ -877,13 +880,13 @@ int zzlIsInRange(unsigned char *zl, zrangespec *range) {
     if (range->min > range->max ||
             (range->min == range->max && (range->minex || range->maxex)))
         return 0;
-
+    //-1 是获取最后一个节点
     p = ziplistIndex(zl,-1); /* Last score. */
     if (p == NULL) return 0; /* Empty sorted set */
     score = zzlGetScore(p);
     if (!zslValueGteMin(score,range))
         return 0;
-
+    //获取第一个节点
     p = ziplistIndex(zl,1); /* First score. */
     serverAssert(p != NULL);
     score = zzlGetScore(p);
@@ -900,12 +903,14 @@ unsigned char *zzlFirstInRange(unsigned char *zl, zrangespec *range) {
     double score;
 
     /* If everything is out of range, return early. */
+    //判断rang是否在范围内
     if (!zzlIsInRange(zl,range)) return NULL;
 
     while (eptr != NULL) {
+        //获取
         sptr = ziplistNext(zl,eptr);
         serverAssert(sptr != NULL);
-
+        //获取分数
         score = zzlGetScore(sptr);
         if (zslValueGteMin(score,range)) {
             /* Check if score <= max. */
@@ -1804,15 +1809,18 @@ void zremrangeGenericCommand(client *c, int rangetype) {
 
     /* Step 1: Parse the range. */
     if (rangetype == ZRANGE_RANK) {
+        //rank是获取排名
         if ((getLongFromObjectOrReply(c,c->argv[2],&start,NULL) != C_OK) ||
             (getLongFromObjectOrReply(c,c->argv[3],&end,NULL) != C_OK))
             return;
     } else if (rangetype == ZRANGE_SCORE) {
+        //parse 分数
         if (zslParseRange(c->argv[2],c->argv[3],&range) != C_OK) {
             addReplyError(c,"min or max is not a float");
             return;
         }
     } else if (rangetype == ZRANGE_LEX) {
+        
         if (zslParseLexRange(c->argv[2],c->argv[3],&lexrange) != C_OK) {
             addReplyError(c,"min or max not valid string range item");
             return;
@@ -1823,6 +1831,7 @@ void zremrangeGenericCommand(client *c, int rangetype) {
     if ((zobj = lookupKeyWriteOrReply(c,key,shared.czero)) == NULL ||
         checkType(c,zobj,OBJ_ZSET)) goto cleanup;
 
+    //rank的时候要进行一系列start 和end的判断
     if (rangetype == ZRANGE_RANK) {
         /* Sanitize indexes. */
         llen = zsetLength(zobj);
@@ -3233,6 +3242,9 @@ void zscanCommand(client *c) {
  *
  * The synchronous version instead does not need to emit the key, but may
  * use the 'count' argument to return multiple items if available. */
+//keyv 是多个key的值
+//keyc 是key的个数
+
 void genericZpopCommand(client *c, robj **keyv, int keyc, int where, int emitkey, robj *countarg) {
     int idx;
     robj *key = NULL;
@@ -3257,6 +3269,7 @@ void genericZpopCommand(client *c, robj **keyv, int keyc, int where, int emitkey
         key = keyv[idx++];
         zobj = lookupKeyWrite(c->db,key);
         if (!zobj) continue;
+        //查看类型是否zset
         if (checkType(c,zobj,OBJ_ZSET)) return;
         break;
     }
@@ -3271,6 +3284,7 @@ void genericZpopCommand(client *c, robj **keyv, int keyc, int where, int emitkey
     long arraylen = 0;
 
     /* We emit the key only for the blocking variant. */
+    //返回多参数
     if (emitkey) addReplyBulk(c,key);
 
     /* Remove the element. */
@@ -3314,7 +3328,7 @@ void genericZpopCommand(client *c, robj **keyv, int keyc, int where, int emitkey
 
         serverAssertWithInfo(c,zobj,zsetDel(zobj,ele));
         server.dirty++;
-
+        //第一次的时候返回
         if (arraylen == 0) { /* Do this only for the first iteration. */
             char *events[2] = {"zpopmin","zpopmax"};
             notifyKeyspaceEvent(NOTIFY_ZSET,events[where],key,c->db->id);
@@ -3362,7 +3376,7 @@ void blockingGenericZpopCommand(client *c, int where) {
     robj *o;
     mstime_t timeout;
     int j;
-
+    //获取timeout时间
     if (getTimeoutFromObjectOrReply(c,c->argv[c->argc-1],&timeout,UNIT_SECONDS)
         != C_OK) return;
 
@@ -3373,10 +3387,12 @@ void blockingGenericZpopCommand(client *c, int where) {
                 addReply(c,shared.wrongtypeerr);
                 return;
             } else {
+                //遍历第一个不为
                 if (zsetLength(o) != 0) {
                     /* Non empty zset, this is like a normal ZPOP[MIN|MAX]. */
                     genericZpopCommand(c,&c->argv[j],1,where,1,NULL);
                     /* Replicate it as an ZPOP[MIN|MAX] instead of BZPOP[MIN|MAX]. */
+                    //当作zpop和
                     rewriteClientCommandVector(c,2,
                         where == ZSET_MAX ? shared.zpopmax : shared.zpopmin,
                         c->argv[j]);

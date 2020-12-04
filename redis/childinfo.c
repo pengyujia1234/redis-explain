@@ -34,13 +34,17 @@
  * RDB / AOF saving process from the child to the parent (for instance
  * the amount of copy on write memory used) */
 void openChildInfoPipe(void) {
+    //建立通道一个负责写，一个负责读，常用于父子或者兄弟线程通信
     if (pipe(server.child_info_pipe) == -1) {
         /* On error our two file descriptors should be still set to -1,
          * but we call anyway cloesChildInfoPipe() since can't hurt. */
         closeChildInfoPipe();
-    } else if (anetNonBlock(NULL,server.child_info_pipe[0]) != ANET_OK) {
+    } 
+    //设置非阻塞通道
+    else if (anetNonBlock(NULL,server.child_info_pipe[0]) != ANET_OK) {
         closeChildInfoPipe();
     } else {
+        //初始化全部set0；
         memset(&server.child_info_data,0,sizeof(server.child_info_data));
     }
 }
@@ -61,9 +65,11 @@ void closeChildInfoPipe(void) {
  * the corresponding fields it want to sent (according to the process type). */
 void sendChildInfo(int ptype) {
     if (server.child_info_pipe[1] == -1) return;
+    //客户端魔术
     server.child_info_data.magic = CHILD_INFO_MAGIC;
     server.child_info_data.process_type = ptype;
     ssize_t wlen = sizeof(server.child_info_data);
+    //通知到parent 端
     if (write(server.child_info_pipe[1],&server.child_info_data,wlen) != wlen) {
         /* Nothing to do on error, this will be detected by the other side. */
     }
@@ -77,10 +83,13 @@ void receiveChildInfo(void) {
         server.child_info_data.magic == CHILD_INFO_MAGIC)
     {
         if (server.child_info_data.process_type == CHILD_INFO_TYPE_RDB) {
+            //rdb
             server.stat_rdb_cow_bytes = server.child_info_data.cow_size;
         } else if (server.child_info_data.process_type == CHILD_INFO_TYPE_AOF) {
+            //aof
             server.stat_aof_cow_bytes = server.child_info_data.cow_size;
         } else if (server.child_info_data.process_type == CHILD_INFO_TYPE_MODULE) {
+            //其它module 逻辑
             server.stat_module_cow_bytes = server.child_info_data.cow_size;
         }
     }

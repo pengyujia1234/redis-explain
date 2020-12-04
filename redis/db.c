@@ -1298,7 +1298,7 @@ void setExpire(client *c, redisDb *db, robj *key, long long when) {
  * is associated with this key (i.e. the key is non volatile) */
 long long getExpire(redisDb *db, robj *key) {
     dictEntry *de;
-
+    
     /* No expire? return ASAP */
     if (dictSize(db->expires) == 0 ||
        (de = dictFind(db->expires,key->ptr)) == NULL) return -1;

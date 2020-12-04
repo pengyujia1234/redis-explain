@@ -74,7 +74,9 @@ struct _rio {
         /* Stdio file pointer target. */
         struct {
             FILE *fp;
+            //记录已经写入的byte
             off_t buffered; /* Bytes written since last fsync. */
+            //设置auto sync，默认是每32MB sync一次
             off_t autosync; /* fsync after 'autosync' bytes written. */
         } file;
         /* Connection object (used to read from socket) */
@@ -101,14 +103,19 @@ typedef struct _rio rio;
  * if needed. */
 
 static inline size_t rioWrite(rio *r, const void *buf, size_t len) {
+    //查看rio的状态
     if (r->flags & RIO_FLAG_WRITE_ERROR) return 0;
     while (len) {
+        //返回要写byte
         size_t bytes_to_write = (r->max_processing_chunk && r->max_processing_chunk < len) ? r->max_processing_chunk : len;
+        //生成cheksum
         if (r->update_cksum) r->update_cksum(r,buf,bytes_to_write);
+        //write ->rioFileWrite
         if (r->write(r,buf,bytes_to_write) == 0) {
             r->flags |= RIO_FLAG_WRITE_ERROR;
             return 0;
         }
+        //更新相关处理的buf值
         buf = (char*)buf + bytes_to_write;
         len -= bytes_to_write;
         r->processed_bytes += bytes_to_write;

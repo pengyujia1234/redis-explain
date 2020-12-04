@@ -606,7 +606,8 @@ long long dictFingerprint(dict *d) {
 }
 
 dictIterator *dictGetIterator(dict *d)
-{
+{   
+    //初始信息
     dictIterator *iter = zmalloc(sizeof(*iter));
 
     iter->d = d;
@@ -620,7 +621,8 @@ dictIterator *dictGetIterator(dict *d)
 
 dictIterator *dictGetSafeIterator(dict *d) {
     dictIterator *i = dictGetIterator(d);
-
+    //设置安全的迭代器只允许
+    //查询
     i->safe = 1;
     return i;
 }

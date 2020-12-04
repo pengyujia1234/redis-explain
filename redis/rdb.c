@@ -771,6 +771,7 @@ size_t rdbSaveStreamConsumers(rio *rdb, streamCG *cg) {
 
 /* Save a Redis object.
  * Returns -1 on error, number of bytes written on success. */
+//根据没中类型都有相应不同的处理
 ssize_t rdbSaveObject(rio *rdb, robj *o, robj *key) {
     ssize_t n = 0, nwritten = 0;
 
@@ -1047,11 +1048,14 @@ size_t rdbSavedObjectLen(robj *o, robj *key) {
  * On error -1 is returned.
  * On success if the key was actually saved 1 is returned, otherwise 0
  * is returned (the key was already expired). */
+//rdb写入的主要方法
 int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
+    //使用的淘汰策略是啥
     int savelru = server.maxmemory_policy & MAXMEMORY_FLAG_LRU;
     int savelfu = server.maxmemory_policy & MAXMEMORY_FLAG_LFU;
 
     /* Save the expire time */
+    //如果
     if (expiretime != -1) {
         if (rdbSaveType(rdb,RDB_OPCODE_EXPIRETIME_MS) == -1) return -1;
         if (rdbSaveMillisecondTime(rdb,expiretime) == -1) return -1;
@@ -1059,6 +1063,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
 
     /* Save the LRU info. */
     if (savelru) {
+        //存储lru的信息
         uint64_t idletime = estimateObjectIdleTime(val);
         idletime /= 1000; /* Using seconds is enough and requires less space.*/
         if (rdbSaveType(rdb,RDB_OPCODE_IDLE) == -1) return -1;
@@ -1066,6 +1071,7 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     }
 
     /* Save the LFU info. */
+    //存储lfu的信息
     if (savelfu) {
         uint8_t buf[1];
         buf[0] = LFUDecrAndReturn(val);
@@ -1078,11 +1084,15 @@ int rdbSaveKeyValuePair(rio *rdb, robj *key, robj *val, long long expiretime) {
     }
 
     /* Save type, key, value */
+    //写入vald的type
     if (rdbSaveObjectType(rdb,val) == -1) return -1;
+    //写入key
     if (rdbSaveStringObject(rdb,key) == -1) return -1;
+    //写入val的信息
     if (rdbSaveObject(rdb,val,key) == -1) return -1;
 
     /* Delay return if required (for testing) */
+    //如果是测试的时候这里可以设置sleep,delay整个运行
     if (server.rdb_key_save_delay)
         usleep(server.rdb_key_save_delay);
 
@@ -1120,12 +1130,17 @@ int rdbSaveInfoAuxFields(rio *rdb, int rdbflags, rdbSaveInfo *rsi) {
     int aof_preamble = (rdbflags & RDBFLAGS_AOF_PREAMBLE) != 0;
 
     /* Add a few fields about the state when the RDB was created. */
+    //写入redis版本号
     if (rdbSaveAuxFieldStrStr(rdb,"redis-ver",REDIS_VERSION) == -1) return -1;
+    //写入是多少位的redis版本64或者32
     if (rdbSaveAuxFieldStrInt(rdb,"redis-bits",redis_bits) == -1) return -1;
+    //写入时间
     if (rdbSaveAuxFieldStrInt(rdb,"ctime",time(NULL)) == -1) return -1;
+    //写入已使用的内存数
     if (rdbSaveAuxFieldStrInt(rdb,"used-mem",zmalloc_used_memory()) == -1) return -1;
 
     /* Handle saving options that generate aux fields. */
+    //主从复制的时候
     if (rsi) {
         if (rdbSaveAuxFieldStrInt(rdb,"repl-stream-db",rsi->repl_stream_db)
             == -1) return -1;
@@ -1134,6 +1149,7 @@ int rdbSaveInfoAuxFields(rio *rdb, int rdbflags, rdbSaveInfo *rsi) {
         if (rdbSaveAuxFieldStrInt(rdb,"repl-offset",server.master_repl_offset)
             == -1) return -1;
     }
+    // Load/save the RDB as AOF preamble
     if (rdbSaveAuxFieldStrInt(rdb,"aof-preamble",aof_preamble) == -1) return -1;
     return 1;
 }
@@ -1192,45 +1208,62 @@ int rdbSaveRio(rio *rdb, int *error, int rdbflags, rdbSaveInfo *rsi) {
     int j;
     uint64_t cksum;
     size_t processed = 0;
-
+    //设置rdb checksum
     if (server.rdb_checksum)
         rdb->update_cksum = rioGenericUpdateChecksum;
+    //设置rdbversion     
     snprintf(magic,sizeof(magic),"REDIS%04d",RDB_VERSION);
+    //写入魔数值
     if (rdbWriteRaw(rdb,magic,9) == -1) goto werr;
+    //写入rdb一些前置信息
     if (rdbSaveInfoAuxFields(rdb,rdbflags,rsi) == -1) goto werr;
+    //写入module相关信息
     if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_BEFORE_RDB) == -1) goto werr;
 
     for (j = 0; j < server.dbnum; j++) {
+        //开始遍历键值空间
         redisDb *db = server.db+j;
         dict *d = db->dict;
         if (dictSize(d) == 0) continue;
         di = dictGetSafeIterator(d);
 
         /* Write the SELECT DB opcode */
+        //写入db标示
         if (rdbSaveType(rdb,RDB_OPCODE_SELECTDB) == -1) goto werr;
+        //db编号
         if (rdbSaveLen(rdb,j) == -1) goto werr;
 
         /* Write the RESIZE DB opcode. */
         uint64_t db_size, expires_size;
         db_size = dictSize(db->dict);
         expires_size = dictSize(db->expires);
+        //写入字典的总共size
         if (rdbSaveType(rdb,RDB_OPCODE_RESIZEDB) == -1) goto werr;
+        //第一个是键值空间
         if (rdbSaveLen(rdb,db_size) == -1) goto werr;
+        //第二个是设置了过期时间的size
         if (rdbSaveLen(rdb,expires_size) == -1) goto werr;
 
         /* Iterate this DB writing every entry */
+        //开始来遍历db
         while((de = dictNext(di)) != NULL) {
+            //获得key
             sds keystr = dictGetKey(de);
+            //获得val
             robj key, *o = dictGetVal(de);
             long long expire;
-
+            //包装成一个redis obj
             initStaticStringObject(key,keystr);
+            //获取key的expire time
             expire = getExpire(db,&key);
+            //这里是存储键值的地方
             if (rdbSaveKeyValuePair(rdb,&key,o,expire) == -1) goto werr;
 
             /* When this RDB is produced as part of an AOF rewrite, move
              * accumulated diff from parent to child while rewriting in
              * order to have a smaller final write. */
+            //aof rewrite部分会调用到下面这个逻辑，后面我们讲aof部分再来详细看一段
+            //每写一段文件后，调用一次
             if (rdbflags & RDBFLAGS_AOF_PREAMBLE &&
                 rdb->processed_bytes > processed+AOF_READ_DIFF_INTERVAL_BYTES)
             {
@@ -1256,16 +1289,18 @@ int rdbSaveRio(rio *rdb, int *error, int rdbflags, rdbSaveInfo *rsi) {
         dictReleaseIterator(di);
         di = NULL; /* So that we don't release it again on error. */
     }
-
+    //完成后写入模块信息
     if (rdbSaveModulesAux(rdb, REDISMODULE_AUX_AFTER_RDB) == -1) goto werr;
 
     /* EOF opcode */
+    //rdb结束符号
     if (rdbSaveType(rdb,RDB_OPCODE_EOF) == -1) goto werr;
 
     /* CRC64 checksum. It will be zero if checksum computation is disabled, the
      * loading code skips the check in this case. */
     cksum = rdb->cksum;
     memrev64ifbe(&cksum);
+    //写入cksum
     if (rioWrite(rdb,&cksum,8) == 0) goto werr;
     return C_OK;
 
@@ -1311,10 +1346,12 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     FILE *fp;
     rio rdb;
     int error = 0;
-
+    //打印信息
     snprintf(tmpfile,256,"temp-%d.rdb", (int) getpid());
+    //打开一个文件，并给予写入权限
     fp = fopen(tmpfile,"w");
     if (!fp) {
+        //get cwd 是获取当前路径
         char *cwdp = getcwd(cwd,MAXPATHLEN);
         serverLog(LL_WARNING,
             "Failed opening the RDB file %s (in server root dir %s) "
@@ -1324,25 +1361,29 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
             strerror(errno));
         return C_ERR;
     }
-
+    //初始化rdb的信息
     rioInitWithFile(&rdb,fp);
+    //通知开始rdb事件
     startSaving(RDBFLAGS_NONE);
-
+    //设置自动sync
     if (server.rdb_save_incremental_fsync)
         rioSetAutoSync(&rdb,REDIS_AUTOSYNC_BYTES);
-
+    //下面这个方法是rdb 写入的主要流程    
     if (rdbSaveRio(&rdb,&error,RDBFLAGS_NONE,rsi) == C_ERR) {
         errno = error;
         goto werr;
     }
 
     /* Make sure data will not remain on the OS's output buffers */
+    //flush到磁盘而不是在buf中
     if (fflush(fp) == EOF) goto werr;
     if (fsync(fileno(fp)) == -1) goto werr;
+    //关闭文件执政
     if (fclose(fp) == EOF) goto werr;
 
     /* Use RENAME to make sure the DB file is changed atomically only
      * if the generate DB file is ok. */
+    //保存文件在对应位置
     if (rename(tmpfile,filename) == -1) {
         char *cwdp = getcwd(cwd,MAXPATHLEN);
         serverLog(LL_WARNING,
@@ -1358,8 +1399,11 @@ int rdbSave(char *filename, rdbSaveInfo *rsi) {
     }
 
     serverLog(LL_NOTICE,"DB saved on disk");
+    //把dirty置为0
     server.dirty = 0;
+    //设置last save time
     server.lastsave = time(NULL);
+    //设置bgsave的状态
     server.lastbgsave_status = C_OK;
     stopSaving(1);
     return C_OK;
@@ -1374,26 +1418,33 @@ werr:
 
 int rdbSaveBackground(char *filename, rdbSaveInfo *rsi) {
     pid_t childpid;
-
+    //判断是否有其它子线程存在
     if (hasActiveChildProcess()) return C_ERR;
-
+    //记录下dirty
     server.dirty_before_bgsave = server.dirty;
+    //获取当前时间
     server.lastbgsave_try = time(NULL);
+    //建立起通道
     openChildInfoPipe();
-
+    //fork一个子进程
     if ((childpid = redisFork()) == 0) {
         int retval;
 
         /* Child */
+        //设置子进程的title
         redisSetProcTitle("redis-rdb-bgsave");
+        //设置cpu亲和
         redisSetCpuAffinity(server.bgsave_cpulist);
+        //rdb的主方法
         retval = rdbSave(filename,rsi);
         if (retval == C_OK) {
             sendChildCOWInfo(CHILD_INFO_TYPE_RDB, "RDB");
         }
         exitFromChild((retval == C_OK) ? 0 : 1);
     } else {
+        //父进程运行
         /* Parent */
+        //如果建立子进程没成功则关闭通道
         if (childpid == -1) {
             closeChildInfoPipe();
             server.lastbgsave_status = C_ERR;
@@ -2039,16 +2090,18 @@ void stopLoading(int success) {
                             REDISMODULE_SUBEVENT_LOADING_FAILED,
                           NULL);
 }
-
+//开始保存？
 void startSaving(int rdbflags) {
     /* Fire the persistence modules end event. */
     int subevent;
     if (rdbflags & RDBFLAGS_AOF_PREAMBLE)
         subevent = REDISMODULE_SUBEVENT_PERSISTENCE_AOF_START;
     else if (getpid()!=server.pid)
+        //子线程rdb 会走到这里
         subevent = REDISMODULE_SUBEVENT_PERSISTENCE_RDB_START;
     else
         subevent = REDISMODULE_SUBEVENT_PERSISTENCE_SYNC_RDB_START;
+    //发送event事件，通知相关module
     moduleFireServerEvent(REDISMODULE_EVENT_PERSISTENCE,subevent,NULL);
 }
 
@@ -2402,16 +2455,22 @@ int rdbLoad(char *filename, rdbSaveInfo *rsi, int rdbflags) {
 /* A background saving child (BGSAVE) terminated its work. Handle this.
  * This function covers the case of actual BGSAVEs. */
 void backgroundSaveDoneHandlerDisk(int exitcode, int bysignal) {
+    //正常退出
     if (!bysignal && exitcode == 0) {
         serverLog(LL_NOTICE,
             "Background saving terminated with success");
+
         server.dirty = server.dirty - server.dirty_before_bgsave;
         server.lastsave = time(NULL);
         server.lastbgsave_status = C_OK;
-    } else if (!bysignal && exitcode != 0) {
+    } 
+    //处理失败
+    else if (!bysignal && exitcode != 0) {
         serverLog(LL_WARNING, "Background saving error");
         server.lastbgsave_status = C_ERR;
-    } else {
+    } 
+    //通过signal退出
+    else {
         mstime_t latency;
 
         serverLog(LL_WARNING,
@@ -2579,12 +2638,15 @@ int rdbSaveToSlavesSockets(rdbSaveInfo *rsi) {
 }
 
 void saveCommand(client *c) {
+    //判断是否有rdb的子进程在运行
     if (server.rdb_child_pid != -1) {
         addReplyError(c,"Background save already in progress");
         return;
     }
     rdbSaveInfo rsi, *rsiptr;
+    //这个是跟replication相关逻辑
     rsiptr = rdbPopulateSaveInfo(&rsi);
+    //rdb的save主流程
     if (rdbSave(server.rdb_filename,rsiptr) == C_OK) {
         addReply(c,shared.ok);
     } else {
@@ -2598,6 +2660,7 @@ void bgsaveCommand(client *c) {
 
     /* The SCHEDULE option changes the behavior of BGSAVE when an AOF rewrite
      * is in progress. Instead of returning an error a BGSAVE gets scheduled. */
+    //如果带有schedule ，就会设置schedule边领
     if (c->argc > 1) {
         if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"schedule")) {
             schedule = 1;
@@ -2608,11 +2671,14 @@ void bgsaveCommand(client *c) {
     }
 
     rdbSaveInfo rsi, *rsiptr;
+    //replication 
     rsiptr = rdbPopulateSaveInfo(&rsi);
-
+    //是否有rdb backgroud 正在执行
     if (server.rdb_child_pid != -1) {
         addReplyError(c,"Background save already in progress");
-    } else if (hasActiveChildProcess()) {
+    } 
+    //如果有其它子进程在执行则进入下面的schedule判断
+    else if (hasActiveChildProcess()) {
         if (schedule) {
             server.rdb_bgsave_scheduled = 1;
             addReplyStatus(c,"Background saving scheduled");
@@ -2622,7 +2688,9 @@ void bgsaveCommand(client *c) {
             "Use BGSAVE SCHEDULE in order to schedule a BGSAVE whenever "
             "possible.");
         }
-    } else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
+    } 
+    //save backgroud 主流程
+    else if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK) {
         addReplyStatus(c,"Background saving started");
     } else {
         addReply(c,shared.err);
@@ -2640,6 +2708,7 @@ void bgsaveCommand(client *c) {
  * information. */
 rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
     rdbSaveInfo rsi_init = RDB_SAVE_INFO_INIT;
+    //初始数据
     *rsi = rsi_init;
 
     /* If the instance is a master, we can populate the replication info
@@ -2649,18 +2718,22 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
      * connects to us, the NULL repl_backlog will trigger a full
      * synchronization, at the same time we will use a new replid and clear
      * replid2. */
+    //如果是主节点且从节点不为空
     if (!server.masterhost && server.repl_backlog) {
         /* Note that when server.slaveseldb is -1, it means that this master
          * didn't apply any write commands after a full synchronization.
          * So we can let repl_stream_db be 0, this allows a restarted slave
          * to reload replication ID/offset, it's safe because the next write
          * command must generate a SELECT statement. */
+        //如果已经同步过了
+
         rsi->repl_stream_db = server.slaveseldb == -1 ? 0 : server.slaveseldb;
         return rsi;
     }
 
     /* If the instance is a slave we need a connected master
      * in order to fetch the currently selected DB. */
+    //从节点里面的判断
     if (server.master) {
         rsi->repl_stream_db = server.master->db->id;
         return rsi;
