@@ -848,6 +848,7 @@ void copyClientOutputBuffer(client *dst, client *src) {
 /* Return true if the specified client has pending reply buffers to write to
  * the socket. */
 int clientHasPendingReplies(client *c) {
+    //bufpos ！=0&&listLength 也不为1，或者空
     return c->bufpos || listLength(c->reply);
 }
 
@@ -2237,7 +2238,7 @@ int clientSetNameOrReply(client *c, robj *name) {
 void clientCommand(client *c) {
     listNode *ln;
     listIter li;
-
+    //help 返回info信息
     if (c->argc == 2 && !strcasecmp(c->argv[1]->ptr,"help")) {
         const char *help[] = {
 "ID                     -- Return the ID of the current connection.",
@@ -2262,6 +2263,7 @@ NULL
         addReplyHelp(c, help);
     } else if (!strcasecmp(c->argv[1]->ptr,"id") && c->argc == 2) {
         /* CLIENT ID */
+        //返回client id
         addReplyLongLong(c,c->id);
     } else if (!strcasecmp(c->argv[1]->ptr,"list")) {
         /* CLIENT LIST */
@@ -2294,7 +2296,9 @@ NULL
             addReply(c,shared.syntaxerr);
             return;
         }
-    } else if (!strcasecmp(c->argv[1]->ptr,"kill")) {
+    } 
+    //关闭当前client cache 客户端
+    else if (!strcasecmp(c->argv[1]->ptr,"kill")) {
         /* CLIENT KILL <ip:port>
          * CLIENT KILL <option> [value] ... <option> [value] */
         char *addr = NULL;
@@ -2450,6 +2454,7 @@ NULL
 
         /* Parse the options. */
         for (int j = 3; j < c->argc; j++) {
+            //有更多的参数
             int moreargs = (c->argc-1) - j;
 
             if (!strcasecmp(c->argv[j]->ptr,"redirect") && moreargs) {

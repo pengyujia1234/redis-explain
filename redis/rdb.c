@@ -2719,6 +2719,7 @@ rdbSaveInfo *rdbPopulateSaveInfo(rdbSaveInfo *rsi) {
      * synchronization, at the same time we will use a new replid and clear
      * replid2. */
     //如果是主节点且从节点不为空
+    //repl backlog 不为空才是有需要复制的节点存在
     if (!server.masterhost && server.repl_backlog) {
         /* Note that when server.slaveseldb is -1, it means that this master
          * didn't apply any write commands after a full synchronization.

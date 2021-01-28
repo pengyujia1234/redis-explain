@@ -110,6 +110,7 @@ typedef struct clusterNodeFailReport {
 } clusterNodeFailReport;
 
 typedef struct clusterNode {
+    //node create time
     mstime_t ctime; /* Node object creation time. */
     char name[CLUSTER_NAMELEN]; /* Node name, hex string, sha1-size */
     int flags;      /* CLUSTER_NODE_... */
@@ -117,35 +118,54 @@ typedef struct clusterNode {
     unsigned char slots[CLUSTER_SLOTS/8]; /* slots handled by this node */
     int numslots;   /* Number of slots handled by this node */
     int numslaves;  /* Number of slave nodes, if this is a master */
+    //slave 
     struct clusterNode **slaves; /* pointers to slave nodes */
     struct clusterNode *slaveof; /* pointer to the master node. Note that it
                                     may be NULL even if the node is a slave
                                     if we don't have the master node in our
                                     tables. */
+    //用于cluster的ping pong 协议                                
     mstime_t ping_sent;      /* Unix time we sent latest ping */
     mstime_t pong_received;  /* Unix time we received the pong */
+    //recevie time
     mstime_t data_received;  /* Unix time we received any data */
     mstime_t fail_time;      /* Unix time when FAIL flag was set */
+    //投票时间给一个slave
     mstime_t voted_time;     /* Last time we voted for a slave of this master */
+    //做为slave 收到 master 的时间
     mstime_t repl_offset_time;  /* Unix time we received offset for this node */
+    //孤儿节点时间time
     mstime_t orphaned_time;     /* Starting time of orphaned master condition */
+    //从节点的时候repl_offset
     long long repl_offset;      /* Last known repl offset for this node. */
+    //ip
     char ip[NET_IP_STR_LEN];  /* Latest known IP address of this node */
     int port;                   /* Latest known clients port of this node */
+    //cluster port
     int cport;                  /* Latest known cluster port of this node. */
+    //tcplink 的结合
     clusterLink *link;          /* TCP/IP link with this node */
+    //node 的failed 的报告
     list *fail_reports;         /* List of nodes signaling this as failing */
 } clusterNode;
 
 typedef struct clusterState {
+    //本身节点信息
     clusterNode *myself;  /* This node */
+    //现在选举周期
     uint64_t currentEpoch;
+    //当前cluster的状态
     int state;            /* CLUSTER_OK, CLUSTER_FAIL, ... */
+    //长度
     int size;             /* Num of master nodes with at least one slot */
+    //node 的字典
     dict *nodes;          /* Hash table of name -> clusterNode structures */
     dict *nodes_black_list; /* Nodes we don't re-add for a few seconds. */
+    //正在转移的slot
     clusterNode *migrating_slots_to[CLUSTER_SLOTS];
+    //正在倒入的slot
     clusterNode *importing_slots_from[CLUSTER_SLOTS];
+    //slot 对应的clusterNode
     clusterNode *slots[CLUSTER_SLOTS];
     uint64_t slots_keys_count[CLUSTER_SLOTS];
     rax *slots_to_keys;

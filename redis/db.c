@@ -1438,7 +1438,7 @@ int *getKeysUsingCommandTable(struct redisCommand *cmd,robj **argv, int argc, in
     keys = getKeysTempBuffer;
     if (count > MAX_KEYS_BUFFER)
         keys = zmalloc(sizeof(int)*count);
-
+    //通过命令的方式获取key的个数
     for (j = cmd->firstkey; j <= last; j += cmd->keystep) {
         if (j >= argc) {
             /* Modules commands, and standard commands with a not fixed number

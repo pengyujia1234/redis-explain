@@ -2017,8 +2017,12 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
                 break;
             }
         }
-
+        //aof的rewrite的时机
         /* Trigger an AOF rewrite if needed. */
+        //如果aof state设置为on
+        //没有子进程在运行
+        //currentSize要超过设置的min-size
+        //且每次aof文件大小成长百分比超过所设置的百分比
         if (server.aof_state == AOF_ON &&
             !hasActiveChildProcess() &&
             server.aof_rewrite_perc &&
@@ -2037,6 +2041,7 @@ int serverCron(struct aeEventLoop *eventLoop, long long id, void *clientData) {
 
     /* AOF postponed flush: Try at every cron cycle if the slow fsync
      * completed. */
+    //有满足条件的aof未写入的时候，会被调用
     if (server.aof_flush_postponed_start) flushAppendOnlyFile(0);
 
     /* AOF write errors: in this case we have a buffer to flush as well and
@@ -3261,9 +3266,12 @@ struct redisCommand *lookupCommandOrOriginal(sds name) {
 void propagate(struct redisCommand *cmd, int dbid, robj **argv, int argc,
                int flags)
 {
+    //如果aof是打开的且命令传播状态是aof
     if (server.aof_state != AOF_OFF && flags & PROPAGATE_AOF)
+        //传入参数命令类型，dbid,参数，参数个数
         feedAppendOnlyFile(cmd,dbid,argv,argc);
     if (flags & PROPAGATE_REPL)
+        //传播到replication里面
         replicationFeedSlaves(server.slaves,dbid,argv,argc);
 }
 
@@ -3358,9 +3366,11 @@ void preventCommandReplication(client *c) {
  *
  */
 void call(client *c, int flags) {
+    //dirty 指写入操作的时候会++
     long long dirty;
     ustime_t start, duration;
     int client_old_flags = c->flags;
+    //所要执行的命令
     struct redisCommand *real_cmd = c->cmd;
 
     server.fixed_time_expire++;
@@ -3371,32 +3381,40 @@ void call(client *c, int flags) {
         !server.loading &&
         !(c->cmd->flags & (CMD_SKIP_MONITOR|CMD_ADMIN)))
     {
+        //当执行monitor 命令的时候会把数据传送过去
         replicationFeedMonitors(c,server.monitors,c->db->id,c->argv,c->argc);
     }
 
     /* Initialization: clear the flags that must be set by the command on
      * demand, and initialize the array for additional commands propagation. */
+    //消除force aof,force 同步slave,和阻止aof，阻止slave同步
     c->flags &= ~(CLIENT_FORCE_AOF|CLIENT_FORCE_REPL|CLIENT_PREVENT_PROP);
     redisOpArray prev_also_propagate = server.also_propagate;
     redisOpArrayInit(&server.also_propagate);
 
     /* Call the command. */
     dirty = server.dirty;
+    //更新ustime
     updateCachedTime(0);
     start = server.ustime;
+    //执行命令
     c->cmd->proc(c);
+    //执行时间
     duration = ustime()-start;
+    //是否产生写入
     dirty = server.dirty-dirty;
     if (dirty < 0) dirty = 0;
 
     /* When EVAL is called loading the AOF we don't want commands called
      * from Lua to go into the slowlog or to populate statistics. */
+    //lua相关逻辑
     if (server.loading && c->flags & CLIENT_LUA)
         flags &= ~(CMD_CALL_SLOWLOG | CMD_CALL_STATS);
 
     /* If the caller is Lua, we want to force the EVAL caller to propagate
      * the script if the command flag or client flag are forcing the
      * propagation. */
+    //lua的执行
     if (c->flags & CLIENT_LUA && server.lua_caller) {
         if (c->flags & CLIENT_FORCE_REPL)
             server.lua_caller->flags |= CLIENT_FORCE_REPL;
@@ -3406,13 +3424,14 @@ void call(client *c, int flags) {
 
     /* Log the command into the Slow log if needed, and populate the
      * per-command statistics that we show in INFO commandstats. */
+    //记录slow log ，如果需要的话
     if (flags & CMD_CALL_SLOWLOG && !(c->cmd->flags & CMD_SKIP_SLOWLOG)) {
         char *latency_event = (c->cmd->flags & CMD_FAST) ?
                               "fast-command" : "command";
         latencyAddSampleIfNeeded(latency_event,duration/1000);
         slowlogPushEntryIfNeeded(c,c->argv,c->argc,duration);
     }
-
+    //需要统计命令
     if (flags & CMD_CALL_STATS) {
         /* use the real command that was executed (cmd and lastamc) may be
          * different, in case of MULTI-EXEC or re-written commands such as
@@ -3422,6 +3441,8 @@ void call(client *c, int flags) {
     }
 
     /* Propagate the command into the AOF and replication link */
+    //flag 判断，有可能在命令执行的过程里面
+    //会改变flag的状态
     if (flags & CMD_CALL_PROPAGATE &&
         (c->flags & CLIENT_PREVENT_PROP) != CLIENT_PREVENT_PROP)
     {
@@ -3429,16 +3450,19 @@ void call(client *c, int flags) {
 
         /* Check if the command operated changes in the data set. If so
          * set for replication / AOF propagation. */
+         //如果没有产生实际的数据写入则不需要传播
         if (dirty) propagate_flags |= (PROPAGATE_AOF|PROPAGATE_REPL);
 
         /* If the client forced AOF / replication of the command, set
          * the flags regardless of the command effects on the data set. */
+        //如果是force aof,则设置状态
         if (c->flags & CLIENT_FORCE_REPL) propagate_flags |= PROPAGATE_REPL;
         if (c->flags & CLIENT_FORCE_AOF) propagate_flags |= PROPAGATE_AOF;
 
         /* However prevent AOF / replication propagation if the command
          * implementations called preventCommandPropagation() or similar,
          * or if we don't have the call() flags to do so. */
+        //意思是拒绝aof，replication 传播的命令需要实现 类似preventCommandPropagation()的逻辑
         if (c->flags & CLIENT_PREVENT_REPL_PROP ||
             !(flags & CMD_CALL_PROPAGATE_REPL))
                 propagate_flags &= ~PROPAGATE_REPL;
@@ -3449,6 +3473,7 @@ void call(client *c, int flags) {
         /* Call propagate() only if at least one of AOF / replication
          * propagation is needed. Note that modules commands handle replication
          * in an explicit way, so we never replicate them automatically. */
+        //命令不是从module 导入过来，且传播状态不为空的，进入下面逻辑
         if (propagate_flags != PROPAGATE_NONE && !(c->cmd->flags & CMD_MODULE))
             propagate(c->cmd,c->db->id,c->argv,c->argc,propagate_flags);
     }
@@ -3661,12 +3686,16 @@ int processCommand(client *c) {
     {
         int hashslot;
         int error_code;
+        //获得对应clusternode
         clusterNode *n = getNodeByQuery(c,c->cmd,c->argv,c->argc,
                                         &hashslot,&error_code);
+
         if (n == NULL || n != server.cluster->myself) {
             if (c->cmd->proc == execCommand) {
+                //放弃事务
                 discardTransaction(c);
             } else {
+                //flag dirty exec so exec will faile
                 flagTransaction(c);
             }
             clusterRedirectClient(c,n,hashslot,error_code);
@@ -5079,6 +5108,7 @@ void loadDataFromDisk(void) {
                  * information in function rdbPopulateSaveInfo. */
                 rsi.repl_stream_db != -1)
             {
+                //rdb repl_id更新
                 memcpy(server.replid,rsi.repl_id,sizeof(server.replid));
                 server.master_repl_offset = rsi.repl_offset;
                 /* If we are a slave, create a cached master from this
