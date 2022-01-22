@@ -82,7 +82,7 @@ void moduleCallClusterReceivers(const char *sender_id, uint64_t module_id, uint8
  * -------------------------------------------------------------------------- */
 
 /* Load the cluster config from 'filename'.
- *
+ * 加载config file
  * If the file does not exist or is zero-length (this may happen because
  * when we lock the nodes.conf file, we create a zero-length one for the
  * sake of locking if it does not already exist), C_ERR is returned.
